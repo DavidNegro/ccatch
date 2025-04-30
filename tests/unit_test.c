@@ -20,7 +20,7 @@ TEST(MultipleCases, "[tags-are-not-implemented-yet][tag1][tag2]") {
         size_t i = GENERATE("Test generate", 2);
         LOG("Hello from {} generated case {}", FMT_STR("test2"), FMT_UINT(i));
     }
-    LOG("End")
+    LOG("End");
 }
 
 
@@ -29,6 +29,7 @@ TEST(Assertions, "") {
     int b = 16;
 
     CASE("Checks") {
+        CHECK(a < b);
         CHECK(a > b, "a is not bigger than b with a = {} b = {}", FMT_INT(a), FMT_INT(b));
         // test will continue even if the CHECK condition fails (use require to
         // finish the excution if the condition is not meet)
