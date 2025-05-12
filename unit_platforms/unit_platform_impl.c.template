@@ -1,0 +1,3 @@
+#define UNIT_IMPL
+#include "unit.h"
+#include "%s.h"

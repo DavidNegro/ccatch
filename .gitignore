@@ -1,4 +1,6 @@
 /.jj
+/.xmake
+/build
 /release
 /tmp
 *.obj

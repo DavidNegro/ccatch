@@ -1,5 +1,5 @@
 @echo off
-pushd "%~dp0"
+pushd "%~dp0\.."
 
 rem Create directories
 if not exist "release" mkdir release

@@ -9,4 +9,4 @@ See `unit_test.c` & `unit_impl.c` as an usage example.
 Only tested in Windows with msvc.
 
 To create the amalgamated header, run a developer command prompt (or run the
-`developer_cmd.ps1` prompt script) adn run `build.bat`
+`scripts/developer_cmd.ps1` prompt script) and run `scripts/build.bat`
