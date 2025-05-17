@@ -49,9 +49,10 @@ function _git_current_branch(git)
 end
 
 function _git_uncommited_changes(git)
-    local changes, err = os.iorunv(git, {"status", "--porcelain=1 "})
+    local changes, err = os.iorunv(git, {"status", "--porcelain=v1"})
     changes = string.trim(changes)
-    if changes then
+    print("debug-changes \"" ..changes .. "\"")
+    if changes ~= "" then
         return true
     else
         return false
@@ -113,8 +114,8 @@ function main()
     task.run("pack")
 
     -- create and push the tag
-    _git_create_tag(git, version)
+    _git_create_tag(git, project.version())
 
     -- create gh release
-    _gh_create_release(gh, version)
+    _gh_create_release(gh, project.version())
 end
