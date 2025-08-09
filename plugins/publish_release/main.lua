@@ -1,4 +1,3 @@
-
 import("core.base.task")
 import("core.project.project")
 import("lib.detect.find_program")
@@ -24,14 +23,16 @@ function _transition_from_jj(git)
 
     -- verify the current change is empty
     -- If the current change is not empty, git will detect uncommited changes
-    local is_empty, err = os.iorunv(jj, {"log", "-r@", "-T", "empty", "--no-graph", "--color", "never"})
+    local is_empty, err = os.iorunv(jj, { "log", "-r@", "-T", "empty", "--no-graph", "--color", "never" })
     is_empty = string.trim(is_empty)
     if is_empty ~= "true" then
         _end_with_error("Current change is not empty, run jj new")
     end
 
     -- verify that the git_head() commit points to main
-    local is_main, err2 = os.iorunv(jj, {"log", "-r", "git_head()", "-T", "bookmarks.filter(|s| s.name()=='main').len() == 1", "--no-graph", "--color", "never"})
+    local is_main, err2 = os.iorunv(jj,
+        { "log", "-r", "git_head()", "-T", "bookmarks.filter(|s| s.name()=='main').len() == 1", "--no-graph", "--color",
+            "never" })
     is_main = string.trim(is_main)
     if not is_main == "true" then
         _end_with_error("jj git head is not main")
@@ -39,19 +40,18 @@ function _transition_from_jj(git)
 
     -- now, we can safely invoke "git checkout main" to transition into a valid
     -- git state
-    os.execv(git, {"checkout", "main"})
+    os.execv(git, { "checkout", "main" })
 end
 
-
 function _git_current_branch(git)
-    local branch, err = os.iorunv(git, {"rev-parse", "--abbrev-ref", "HEAD"})
+    local branch, err = os.iorunv(git, { "rev-parse", "--abbrev-ref", "HEAD" })
     return string.trim(branch)
 end
 
 function _git_uncommited_changes(git)
-    local changes, err = os.iorunv(git, {"status", "--porcelain=v1"})
+    local changes, err = os.iorunv(git, { "status", "--porcelain=v1" })
     changes = string.trim(changes)
-    print("debug-changes \"" ..changes .. "\"")
+    print("debug-changes \"" .. changes .. "\"")
     if changes ~= "" then
         return true
     else
@@ -60,17 +60,18 @@ function _git_uncommited_changes(git)
 end
 
 function _git_create_tag(git, version)
-    os.runv(git, {"tag", "-a", "v"..version, "-m", "Release " .. version})
-    os.runv(git, {"push", "origin", "v"..version})
+    os.runv(git, { "tag", "-a", "v" .. version, "-m", "Release " .. version })
+    os.runv(git, { "push", "origin", "v" .. version })
 end
 
 function _gh_version_exists(gh, version)
-    local result = os.execv(gh, {"release", "view", "v"..version}, {try = true, stdout = os.nuldev(), stderr = os.nuldev()})
+    local result = os.execv(gh, { "release", "view", "v" .. version },
+        { try = true, stdout = os.nuldev(), stderr = os.nuldev() })
     return result == 0
 end
 
 function _gh_create_release(gh, version)
-    os.runv(gh, {"release", "create",  "v"..version, "build/xpack/unit/unit-v" .. version .. ".zip" })
+    os.runv(gh, { "release", "create", "v" .. version, "build/xpack/unit/unit-v" .. version .. ".zip" })
 end
 
 function main()

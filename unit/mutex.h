@@ -14,7 +14,7 @@
 #ifndef UNIT_NO_MULTITHREAD
 #ifdef _WIN32
 // win32
-typedef void* UNIT_NAME(mutex); // equivalent to an SRWLOCK)
+typedef void* unit_mutex_t; // equivalent to an SRWLOCK)
 /*
 typedef struct _RTL_SRWLOCK {
         PVOID Ptr;
@@ -44,20 +44,20 @@ __stdcall
 AcquireSRWLockExclusive(PSRWLOCK SRWLock);
 #endif
 
-static inline void UNIT_NAME(mutex_init)(UNIT_NAME(mutex)* mut) {
+static inline void unit_mutex_init(unit_mutex_t* mut) {
     InitializeSRWLock((PSRWLOCK)mut);
 }
 
-static inline void UNIT_NAME(mutex_deinit)(UNIT_NAME(mutex)* mut) {
+static inline void unit_mutex_deinit(unit_mutex_t* mut) {
     // do nothing
     UNIT_IGNORE_UNUSED(mut);
 }
 
-static inline void UNIT_NAME(mutex_lock)(UNIT_NAME(mutex)* mut) {
+static inline void unit_mutex_lock(unit_mutex_t* mut) {
     AcquireSRWLockExclusive((PSRWLOCK)mut);
 }
 
-static inline void UNIT_NAME(mutex_unlock)(UNIT_NAME(mutex)* mut) {
+static inline void unit_mutex_unlock(unit_mutex_t* mut) {
     ReleaseSRWLockExclusive((PSRWLOCK)mut);
 }
 
@@ -67,20 +67,20 @@ static inline void UNIT_NAME(mutex_unlock)(UNIT_NAME(mutex)* mut) {
 
 #endif
 #else // #ifndef UNIT_NO_MULTITHREAD
-typedef struct {} UNIT_NAME(mutex);
-static inline void UNIT_NAME(mutex_init)(UNIT_NAME(mutex)* mut) {
+typedef struct {} unit_mutex_t;
+static inline void unit_mutex_init(unit_mutex_t*) {
     // do nothing
 }
 
-static inline void UNIT_NAME(mutex_deinit)(UNIT_NAME(mutex)*) {
+static inline void unit_mutex_deinit(unit_mutex_t*) {
     // do nothing
 }
 
-static inline void UNIT_NAME(mutex_lock)(UNIT_NAME(mutex)* mut) {
+static inline void unit_mutex_lock(unit_mutex_t* mut) {
     // do nothing
 }
 
-static inline void UNIT_NAME(mutex_unlock)(UNIT_NAME(mutex)* mut) {
+static inline void unit_mutex_unlock(unit_mutex_t* mut) {
     // do nothing
 }
 #endif

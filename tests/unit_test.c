@@ -1,6 +1,12 @@
 #include "unit.h"
+#include <stddef.h>
 
-TEST(MultipleCases, "[tags-are-not-implemented-yet][tag1][tag2]") {
+#ifdef _MSC_VER
+// no spectre mitigation warnings
+#pragma warning(disable : 5045)
+#endif
+
+TEST(MultipleCases, "[.tags-are-not-implemented-yet][tag1][tag2]") {
     LOG("Prepare ...");
 
     CASE("Test1") {
@@ -24,7 +30,7 @@ TEST(MultipleCases, "[tags-are-not-implemented-yet][tag1][tag2]") {
 }
 
 
-TEST(Assertions, "") {
+TEST(Assertions, "[tag][!shouldfail]") {
     int a = 8;
     int b = 16;
 
@@ -51,26 +57,31 @@ TEST(Assertions, "") {
             LOG("This line will not be executed");
         }
     }
+
 }
 
-TEST(ScopedAllocations, "") {
+TEST(ScopedAllocations, "[tag]") {
     void* memory = SCOPED_ALLOC(1024);
+    (void)memory; // ignore unused variable warning;
     GENERATE("Repeat this many times to make sure the allocation don't leak ", 400);
 }
 
 static void DeferExecution1(void* p) {
+    (void)p; // ignore unused variable warning;
     LOG("Defer 1");
 }
 
 static void DeferExecution2(void* p) {
+    (void)p; // ignore unused variable warning;
     LOG("Defer 2");
 }
 
 static void DeferExecution3(void* p) {
+    (void)p; // ignore unused variable warning;
     LOG("Defer 3");
 }
 
-TEST(Defer, "") {
+TEST(Defer, "[tag]") {
     DEFER(0, DeferExecution1);
     DEFER(0, DeferExecution2);
     DEFER(0, DeferExecution3);

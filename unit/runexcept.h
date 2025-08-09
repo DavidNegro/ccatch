@@ -17,43 +17,44 @@
 */
 #ifndef UNIT_RUNEXCEPT
 #ifdef __cplusplus
+
 // for cpp use exceptions
 namespace {
-    struct UNIT_NAME(exception) {
+    struct unit_exception {
     };
 }
 
-void UNIT_NAME(throw)() {
-    throw UNIT_NAME(exception){};
+void UNIT_NAME(throw)(void) {
+    throw unit_exception{};
 }
 
-static int UNIT_NAME(runexcept)(UNIT_NAME(case_fn) fn) {
+static int unit_runexcept(unit_case_fn_t fn) {
     try {
         fn();
     }
-    catch(UNIT_NAME(exception)) {
+    catch(unit_exception) {
         return -1;
     }
     return 0;
 }
-#define UNIT_RUNEXCEPT(x) UNIT_NAME(runexcept)(x)
+#define UNIT_RUNEXCEPT(x) unit_runexcept(x)
 #else
 // use setjmp in other cases
 #include <setjmp.h>
 
-static jmp_buf UNIT_NAME(jmp_buff);
+static jmp_buf _global_jmp_buff;
 
-void UNIT_NAME(throw)() {
-    longjmp(UNIT_NAME(jmp_buff), -1);
+void UNIT_NAME(throw)(void) {
+    longjmp(_global_jmp_buff, -1);
 }
 
-static int UNIT_NAME(runexcept)(UNIT_NAME(case_fn) fn) {
-    if (setjmp(UNIT_NAME(jmp_buff)) != -1) {
+static int unit_runexcept(UNIT_NAME(case_fn) fn) {
+    if (setjmp(_global_jmp_buff) != -1) {
         fn();
         return 0;
     }
     return -1;
 }
-#define UNIT_RUNEXCEPT(x) UNIT_NAME(runexcept)(x)
+#define UNIT_RUNEXCEPT(x) unit_runexcept(x)
 #endif
 #endif

@@ -1,7 +1,7 @@
 // floating point to string conversion
 // this file defines the following function:
 //
-// static int UNIT_NAME(fpconv_dtoa)(double d, char dest[24]);
+// static int unit_fpconv(double d, char dest[24]);
 
 
 // code taken and adapted from https://github.com/night-shift/fpconv/
@@ -49,12 +49,14 @@ DEALINGS IN THE SOFTWARE.
 #define __test_expmin__     -60
 
 
-typedef struct UNIT_NAME(fp) {
-    uint64_t frac;
+typedef struct _unit_fp {
+    unit_long_uint_t frac;
     int exp;
-} UNIT_NAME(fp);
+    char __padding[4];
+} _unit_fp;
 
-static UNIT_NAME(fp) UNIT_NAME(powers_ten)[] = {
+
+static _unit_fp _powers_ten[] = {
     { 18054884314459144840U, -1220 }, { 13451937075301367670U, -1193 },
     { 10022474136428063862U, -1166 }, { 14934650266808366570U, -1140 },
     { 11127181549972568877U, -1113 }, { 16580792590934885855U, -1087 },
@@ -101,7 +103,7 @@ static UNIT_NAME(fp) UNIT_NAME(powers_ten)[] = {
     { 12648080533535911531U, 1066 }
 };
 
-static UNIT_NAME(fp) UNIT_NAME(find_cachedpow10)(int exp, int* k)
+static _unit_fp _find_cachedpow10(int exp, int* k)
 {
     const double one_log_ten = 0.30102999566398114;
 
@@ -109,7 +111,7 @@ static UNIT_NAME(fp) UNIT_NAME(find_cachedpow10)(int exp, int* k)
     int idx = (approx - __test_firstpower__) / __test_steppowers__;
 
     while(1) {
-        int current = exp + UNIT_NAME(powers_ten)[idx].exp + 64;
+        int current = exp + _powers_ten[idx].exp + 64;
 
         if(current < __test_expmin__) {
             idx++;
@@ -123,7 +125,7 @@ static UNIT_NAME(fp) UNIT_NAME(find_cachedpow10)(int exp, int* k)
 
         *k = (__test_firstpower__ + idx * __test_steppowers__);
 
-        return UNIT_NAME(powers_ten)[idx];
+        return _powers_ten[idx];
     }
 }
 
@@ -138,7 +140,7 @@ static UNIT_NAME(fp) UNIT_NAME(find_cachedpow10)(int exp, int* k)
 #define __test_abs__(n) ((n) < 0 ? -(n) : (n))
 #define __test_min__(a, b) ((a) < (b) ? (a) : (b))
 
-static uint64_t UNIT_NAME(tens)[] = {
+static unit_long_uint_t _tens[] = {
     10000000000000000000U, 1000000000000000000U, 100000000000000000U,
     10000000000000000U, 1000000000000000U, 100000000000000U,
     10000000000000U, 1000000000000U, 100000000000U,
@@ -148,21 +150,21 @@ static uint64_t UNIT_NAME(tens)[] = {
     10U, 1U
 };
 
-static inline uint64_t UNIT_NAME(get_dbits)(double d)
+static inline unit_long_uint_t _get_dbits(double d)
 {
     union {
         double   dbl;
-        uint64_t i;
+        unit_long_uint_t i;
     } dbl_bits = { d };
 
     return dbl_bits.i;
 }
 
-static UNIT_NAME(fp) UNIT_NAME(build_fp)(double d)
+static _unit_fp _build_fp(double d)
 {
-    uint64_t bits = UNIT_NAME(get_dbits)(d);
+    unit_long_uint_t bits = _get_dbits(d);
 
-    __test_fp__ fp;
+    _unit_fp fp;
     fp.frac = bits & __test_fracmask__;
     fp.exp = (bits & __test_expmask__) >> 52;
 
@@ -177,7 +179,7 @@ static UNIT_NAME(fp) UNIT_NAME(build_fp)(double d)
     return fp;
 }
 
-static void UNIT_NAME(normalize)(UNIT_NAME(fp)* fp)
+static void _normalize(_unit_fp* fp)
 {
     while ((fp->frac & __test_hiddenbit__) == 0) {
         fp->frac <<= 1;
@@ -189,7 +191,7 @@ static void UNIT_NAME(normalize)(UNIT_NAME(fp)* fp)
     fp->exp -= shift;
 }
 
-static void UNIT_NAME(get_normalized_boundaries)(UNIT_NAME(fp)* fp, UNIT_NAME(fp)* lower, UNIT_NAME(fp)* upper)
+static void _get_normalized_boundaries(_unit_fp* fp, _unit_fp* lower, _unit_fp* upper)
 {
     upper->frac = (fp->frac << 1) + 1;
     upper->exp  = fp->exp - 1;
@@ -215,20 +217,20 @@ static void UNIT_NAME(get_normalized_boundaries)(UNIT_NAME(fp)* fp, UNIT_NAME(fp
     lower->exp = upper->exp;
 }
 
-static UNIT_NAME(fp) UNIT_NAME(multiply)(UNIT_NAME(fp)* a, UNIT_NAME(fp)* b)
+static _unit_fp _multiply(_unit_fp* a, _unit_fp* b)
 {
-    const uint64_t lomask = 0x00000000FFFFFFFF;
+    const unit_long_uint_t lomask = 0x00000000FFFFFFFF;
 
-    uint64_t ah_bl = (a->frac >> 32)    * (b->frac & lomask);
-    uint64_t al_bh = (a->frac & lomask) * (b->frac >> 32);
-    uint64_t al_bl = (a->frac & lomask) * (b->frac & lomask);
-    uint64_t ah_bh = (a->frac >> 32)    * (b->frac >> 32);
+    unit_long_uint_t ah_bl = (a->frac >> 32)    * (b->frac & lomask);
+    unit_long_uint_t al_bh = (a->frac & lomask) * (b->frac >> 32);
+    unit_long_uint_t al_bl = (a->frac & lomask) * (b->frac & lomask);
+    unit_long_uint_t ah_bh = (a->frac >> 32)    * (b->frac >> 32);
 
-    uint64_t tmp = (ah_bl & lomask) + (al_bh & lomask) + (al_bl >> 32);
+    unit_long_uint_t tmp = (ah_bl & lomask) + (al_bh & lomask) + (al_bl >> 32);
     /* round up */
     tmp += 1U << 31;
 
-    UNIT_NAME(fp) fp = {
+    _unit_fp fp = {
         ah_bh + (ah_bl >> 32) + (al_bh >> 32) + (tmp >> 32),
         a->exp + b->exp + 64
     };
@@ -236,7 +238,7 @@ static UNIT_NAME(fp) UNIT_NAME(multiply)(UNIT_NAME(fp)* a, UNIT_NAME(fp)* b)
     return fp;
 }
 
-static void UNIT_NAME(round_digit)(char* digits, int ndigits, uint64_t delta, uint64_t rem, uint64_t kappa, uint64_t frac)
+static void _round_digit(char* digits, int ndigits, unit_long_uint_t delta, unit_long_uint_t rem, unit_long_uint_t kappa, unit_long_uint_t frac)
 {
     while (rem < frac && delta - rem >= kappa &&
            (rem + kappa < frac || frac - rem > rem + kappa - frac)) {
@@ -246,24 +248,24 @@ static void UNIT_NAME(round_digit)(char* digits, int ndigits, uint64_t delta, ui
     }
 }
 
-static int UNIT_NAME(generate_digits)(UNIT_NAME(fp)* fp, UNIT_NAME(fp)* upper, UNIT_NAME(fp)* lower, char* digits, int* K)
+static int _generate_digits(_unit_fp* fp, _unit_fp* upper, _unit_fp* lower, char* digits, int* K)
 {
-    uint64_t wfrac = upper->frac - fp->frac;
-    uint64_t delta = upper->frac - lower->frac;
+    unit_long_uint_t wfrac = upper->frac - fp->frac;
+    unit_long_uint_t delta = upper->frac - lower->frac;
 
-    UNIT_NAME(fp) one;
+    _unit_fp one;
     one.frac = 1ULL << -upper->exp;
     one.exp  = upper->exp;
 
-    uint64_t part1 = upper->frac >> -one.exp;
-    uint64_t part2 = upper->frac & (one.frac - 1);
+    unit_long_uint_t part1 = upper->frac >> -one.exp;
+    unit_long_uint_t part2 = upper->frac & (one.frac - 1);
 
     int idx = 0, kappa = 10;
-    uint64_t* divp;
+    unit_long_uint_t* divp;
     /* 1000000000 */
-    for(divp = __test_tens__ + 10; kappa > 0; divp++) {
+    for(divp = _tens + 10; kappa > 0; divp++) {
 
-        uint64_t div = *divp;
+        unit_long_uint_t div = *divp;
         unsigned digit = part1 / div;
 
         if (digit || idx) {
@@ -273,17 +275,17 @@ static int UNIT_NAME(generate_digits)(UNIT_NAME(fp)* fp, UNIT_NAME(fp)* upper, U
         part1 -= digit * div;
         kappa--;
 
-        uint64_t tmp = (part1 <<-one.exp) + part2;
+        unit_long_uint_t tmp = (part1 <<-one.exp) + part2;
         if (tmp <= delta) {
             *K += kappa;
-            UNIT_NAME(round_digit)(digits, idx, delta, tmp, div << -one.exp, wfrac);
+            _round_digit(digits, idx, delta, tmp, div << -one.exp, wfrac);
 
             return idx;
         }
     }
 
     /* 10 */
-    uint64_t* unit = UNIT_NAME(tens) + 18;
+    unit_long_uint_t* unit = _tens + 18;
 
     while(1) {
         part2 *= 10;
@@ -298,7 +300,7 @@ static int UNIT_NAME(generate_digits)(UNIT_NAME(fp)* fp, UNIT_NAME(fp)* upper, U
         part2 &= one.frac - 1;
         if (part2 < delta) {
             *K += kappa;
-            UNIT_NAME(round_digit)(digits, idx, delta, part2, one.frac, wfrac * *unit);
+            _round_digit(digits, idx, delta, part2, one.frac, wfrac * *unit);
 
             return idx;
         }
@@ -307,31 +309,31 @@ static int UNIT_NAME(generate_digits)(UNIT_NAME(fp)* fp, UNIT_NAME(fp)* upper, U
     }
 }
 
-static int UNIT_NAME(grisu2)(double d, char* digits, int* K)
+static int _grisu2(double d, char* digits, int* K)
 {
-    UNIT_NAME(fp) w = __test_build_fp__(d);
+    _unit_fp w = _build_fp(d);
 
-    UNIT_NAME(fp) lower, upper;
-    UNIT_NAME(get_normalized_boundaries)(&w, &lower, &upper);
+    _unit_fp lower, upper;
+    _get_normalized_boundaries(&w, &lower, &upper);
 
-    UNIT_NAME(normalize)(&w);
+    _normalize(&w);
 
     int k;
-    UNIT_NAME(fp) cp = UNIT_NAME(find_cachedpow10)(upper.exp, &k);
+    _unit_fp cp = _find_cachedpow10(upper.exp, &k);
 
-    w     = UNIT_NAME(multiply)(&w,     &cp);
-    upper = UNIT_NAME(multiply)(&upper, &cp);
-    lower = UNIT_NAME(multiply)(&lower, &cp);
+    w     = _multiply(&w,     &cp);
+    upper = _multiply(&upper, &cp);
+    lower = _multiply(&lower, &cp);
 
     lower.frac++;
     upper.frac--;
 
     *K = -k;
 
-    return UNIT_NAME(generate_digits)(&w, &upper, &lower, digits, K);
+    return _generate_digits(&w, &upper, &lower, digits, K);
 }
 
-static int UNIT_NAME(emit_digits)(char* digits, int ndigits, char* dest, int K, int neg)
+static int _emit_digits(char* digits, int ndigits, char* dest, int K, int neg)
 {
     int exp = __test_abs__(K + ndigits - 1);
 
@@ -411,14 +413,14 @@ static int UNIT_NAME(emit_digits)(char* digits, int ndigits, char* dest, int K, 
     return idx;
 }
 
-static int UNIT_NAME(filter_special)(double fp, char* dest)
+static int _filter_special(double fp, char* dest)
 {
     if(fp == 0.0) {
         dest[0] = '0';
         return 1;
     }
 
-    uint64_t bits = UNIT_NAME(get_dbits)(fp);
+    unit_long_uint_t bits = _get_dbits(fp);
 
     int nan = (bits & __test_expmask__) == __test_expmask__;
 
@@ -436,29 +438,29 @@ static int UNIT_NAME(filter_special)(double fp, char* dest)
     return 3;
 }
 
-static int UNIT_NAME(fpconv_dtoa)(double d, char dest[24])
+static int unit_fpconv_dtoa(double d, char dest[24])
 {
     char digits[18];
 
     int str_len = 0;
     int neg = 0;
 
-    if(UNIT_NAME(get_dbits)(d) & __test_signmask__) {
+    if(_get_dbits(d) & __test_signmask__) {
         dest[0] = '-';
         str_len++;
         neg = 1;
     }
 
-    int spec = UNIT_NAME(filter_special)(d, dest + str_len);
+    int spec = _filter_special(d, dest + str_len);
 
     if(spec) {
         return str_len + spec;
     }
 
     int K = 0;
-    int ndigits = UNIT_NAME(grisu2)(d, digits, &K);
+    int ndigits = _grisu2(d, digits, &K);
 
-    str_len += UNIT_NAME(emit_digits)(digits, ndigits, dest + str_len, K, neg);
+    str_len += _emit_digits(digits, ndigits, dest + str_len, K, neg);
 
     return str_len;
 }

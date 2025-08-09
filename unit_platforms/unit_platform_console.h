@@ -4,6 +4,11 @@
 
 #pragma once
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 5045)//, justification : "Spectre mitigation")
+#endif
+
 #ifndef UNIT_IMPL
 #error Invalid include!. This file must be included after defining UNIT_IMPL
 #endif
@@ -51,20 +56,35 @@ int __stdcall WriteConsoleA(
     unsigned long* lpNumberOfCharsWritten,
     void* lpReserved
 );
+
+__declspec( dllimport )
+int __stdcall GetConsoleMode(
+  void*  hConsoleHandle,
+  unsigned long* lpMode
+);
+
 #endif
 
-void UNIT_NAME(writeoutput)(int endln, const char* data, size_t size) {
+void unit_writeoutput(int endln, const char* data, size_t size) {
     static void* hdl = 0;
     if (hdl == 0) {
         hdl = GetStdHandle((unsigned long)-11);
     }
-    WriteConsoleA(hdl, data, (unsigned long)size, 0, 0);
-    if (endln) {
-        WriteConsoleA(hdl, UNIT_ENDLINE, 2, 0, 0);
+    unsigned long ignored;
+    if (GetConsoleMode(hdl, &ignored)) {
+        WriteConsoleA(hdl, data, (unsigned long)size, 0, 0);
+        if (endln) {
+            WriteConsoleA(hdl, UNIT_ENDLINE, 2, 0, 0);
+        }
+    }
+    else {
+        // use WriteFile
+        // TODO
+        UNIT_ABORT();
     }
 }
 
-#define UNIT_WRITEOUTPUT(endln, str, len) UNIT_NAME(writeoutput)(endln, str, len);
+#define UNIT_WRITEOUTPUT(endln, str, len) unit_writeoutput(endln, str, len);
 #else
 #error "TODO"
 #endif // #ifdef _WIN32
@@ -74,43 +94,46 @@ void UNIT_NAME(writeoutput)(int endln, const char* data, size_t size) {
 
 #define UNIT_WRITEOUTPUTS(endln, str) UNIT_WRITEOUTPUT(endln, str, UNIT_STRLEN(str))
 
-static int UNIT_NAME(platform_on_log)(UNIT_NAME(log_buffer)* buff, const char* macro_name, int is_error) {
+static int unit_platform_on_log(unit_log_buffer_t* buff, const char* macro_name, int is_error) {
     UNIT_WRITEOUTPUTS(0, "  ");
     char TMP[22];
     TMP[21] = ' ';
-    size_t sz = UNIT_NAME(back_push_uint_unsafe)(TMP + 21, buff->line);
+    size_t sz = _back_push_uint_unsafe(TMP + 21, buff->line);
     TMP[21 - sz - 1] = ':';
     if (is_error) {
         UNIT_WRITEOUTPUTS(0, UNIT_MAGENTA);
-        UNIT_WRITEOUTPUTS(0, macro_name);
-        UNIT_WRITEOUTPUTS(0, UNIT_COLOUR_END);
     }
     else {
         UNIT_WRITEOUTPUTS(0, UNIT_BLUE);
-        UNIT_WRITEOUTPUTS(0, macro_name);
-        UNIT_WRITEOUTPUTS(0, UNIT_COLOUR_END);
     }
+    UNIT_WRITEOUTPUTS(0, macro_name);
+    UNIT_WRITEOUTPUTS(0, UNIT_COLOUR_END);
+
     UNIT_WRITEOUTPUTS(0, " ");
     UNIT_WRITEOUTPUTS(0, UNIT_BLACK)
     UNIT_WRITEOUTPUTS(0, buff->filename);
     UNIT_WRITEOUTPUT(0, TMP + (21 - sz - 1), sz + 2);
     UNIT_WRITEOUTPUTS(0, UNIT_COLOUR_END);
     UNIT_WRITEOUTPUT(1, buff->buff.memory, buff->buff.size);
-    UNIT_NAME(log_buffer_destroy)(buff);
+    unit_log_buffer_destroy(buff);
     return 0;
 }
 
-static int UNIT_NAME(platform_on_subtest_start)(struct UNIT_NAME(test_registry)* test, struct UNIT_NAME(flow_path)* subtest_path, size_t subtest_path_length) {
+static int unit_platform_on_subtest_start(const unit_test_registry_t* test, unit_flow_path_t* subtest_path, unit_size_t subtest_path_length) {
+    UNIT_IGNORE_UNUSED(test);
+    UNIT_IGNORE_UNUSED(subtest_path);
+    UNIT_IGNORE_UNUSED(subtest_path_length);
     return 0;
 }
 
-static int UNIT_NAME(platform_on_subtest_finished)(struct UNIT_NAME(test_registry)* test, struct UNIT_NAME(flow_path)* subtest_path, size_t subtest_path_length, int with_error) {
+static int unit_platform_on_subtest_finished(const unit_test_registry_t* test, unit_flow_path_t* subtest_path, unit_size_t subtest_path_length, int with_error) {
+    UNIT_IGNORE_UNUSED(test);
     if (with_error) {
         UNIT_WRITEOUTPUTS(1, "  Failed subcase:");
         for (size_t i = 0; i < subtest_path_length; i++) {
-            UNIT_NAME(flow_path)* p = subtest_path + i;
+            unit_flow_path_t* p = subtest_path + i;
             UNIT_WRITEOUTPUTS(0, UNIT_BLACK);
-            if (p->flags & UNIT_NAME(flow_flag_is_section)) {
+            if (p->flags & unit_flow_flag_is_section) {
                 UNIT_WRITEOUTPUTS(0, "    CASE: ");
             }
             else {
@@ -118,7 +141,7 @@ static int UNIT_NAME(platform_on_subtest_finished)(struct UNIT_NAME(test_registr
                 char TMP[22];
                 TMP[20] = ':';
                 TMP[21] = ' ';
-                size_t sz = UNIT_NAME(back_push_uint_unsafe)(TMP + 20, p->index);
+                size_t sz = _back_push_uint_unsafe(TMP + 20, p->index);
                 UNIT_WRITEOUTPUT(0, TMP + 20 - sz, sz + 2);
             }
             UNIT_WRITEOUTPUTS(0, UNIT_COLOUR_END UNIT_BRIGHT_YELLOW);
@@ -133,36 +156,83 @@ static int UNIT_NAME(platform_on_subtest_finished)(struct UNIT_NAME(test_registr
 // Main
 // -------------------------------------------------------------------
 
-int main() {
+int main(int argc, char *argv[]) {
+
+    // parse filter
+    int use_filter = 0;
+    unit_test_specs_t filter;
+
+    if (argc >= 2) {
+        use_filter = 1;
+        if (unit_test_specs_init(&filter, argv[1], argv[1] + UNIT_STRLEN(argv[1])) < 0) {
+            UNIT_WRITEOUTPUTS(0, UNIT_BOLD UNIT_RED "INVALID COMMAND LINE PARAMETER: "  UNIT_COLOUR_END UNIT_BOLD_END);
+            UNIT_WRITEOUTPUTS(0, "Error parsing test specs filter string: \"");
+            UNIT_WRITEOUTPUTS(0, argv[1]);
+            UNIT_WRITEOUTPUTS(1, "\"");
+            UNIT_WRITEOUTPUTS(1, unit_test_specs_get_parse_error_description(argv[1]));
+            return -1;
+        }
+    }
+
     int result = 0;
-    UNIT_NAME(init)();
-    size_t num_tests;
-    const UNIT_NAME(test_registry)* tests = UNIT_NAME(get_test_registry)(&num_tests);
+    unit_init();
+    unit_size_t num_tests;
+    const unit_test_registry_t* tests = unit_get_test_registry(&num_tests);
     for (size_t i = 0; i < num_tests; i++) {
-        UNIT_NAME(test_registry)* reg = tests + i;
+        const unit_test_registry_t* reg = tests + i;
+
+        int should_skip_test = 0;
+        if (use_filter) {
+            should_skip_test = !unit_test_specs_match(&filter, reg);
+        }
+        else {
+            should_skip_test = reg->flags & unit_test_flag_exclude_from_default;
+        }
+
+        if (should_skip_test) {
+            // TODO: maybe log test skipped
+            continue;
+        }
+
         UNIT_WRITEOUTPUTS(1, "");
         UNIT_WRITEOUTPUTS(0, UNIT_BOLD UNIT_CYAN "> " UNIT_COLOUR_END UNIT_BOLD_END "Running test " UNIT_BOLD UNIT_BRIGHT_YELLOW);
         UNIT_WRITEOUTPUTS(0, reg->name);
         UNIT_WRITEOUTPUTS(1, UNIT_COLOUR_END UNIT_BOLD_END);
 
-        int test_result = UNIT_NAME(test_runner_run_test_all_subcases)(reg);
-        char TMP[20];
-        // UNIT_WRITEOUTPUT(1, "", 0);
-        // UNIT_WRITEOUTPUT(1, "Test results:", 13);
-        // UNIT_WRITEOUTPUT(0, "    Failed cases: ", 18);
-        // size_t num_size = __test_back_push_uint_unsafe__(TMP + 20, num_failed_cases);
-        // UNIT_WRITEOUTPUT(1, TMP + 20 - num_size, num_size);
-        // UNIT_WRITEOUTPUT(0, "    Total cases: ", 17);
-        // num_size = __test_back_push_uint_unsafe__(TMP + 20, num_cases);
-        // UNIT_WRITEOUTPUT(1, TMP + 20 - num_size, num_size);
-        //UNIT_WRITEOUTPUT(1, "", 0);
-        if (test_result) {
-            UNIT_WRITEOUTPUTS(1, UNIT_BOLD UNIT_BRIGHT_RED  "FAILED" UNIT_COLOUR_END UNIT_BOLD_END);
+        int test_result = unit_test_runner_run_test_all_subcases(reg);
+
+        if (reg->flags & unit_test_flag_should_fail) {
+            if (test_result) {
+                UNIT_WRITEOUTPUTS(0, UNIT_BOLD UNIT_BRIGHT_GREEN "FAILED"  UNIT_COLOUR_END UNIT_BOLD_END " (expected failure)");
+                test_result = 0;
+            }
+            else {
+                UNIT_WRITEOUTPUTS(0, UNIT_BOLD UNIT_BRIGHT_RED  "SUCCEEDED" UNIT_COLOUR_END UNIT_BOLD_END " (expected failure)");
+                test_result = 1;
+            }
         }
         else {
-            UNIT_WRITEOUTPUTS(1, UNIT_BOLD UNIT_BRIGHT_GREEN "SUCCEEDED" UNIT_COLOUR_END UNIT_BOLD_END);
-        }        result |= test_result;
+            if (test_result) {
+                UNIT_WRITEOUTPUTS(0, UNIT_BOLD UNIT_BRIGHT_RED  "FAILED" UNIT_COLOUR_END UNIT_BOLD_END);
+            }
+            else {
+                UNIT_WRITEOUTPUTS(0, UNIT_BOLD UNIT_BRIGHT_GREEN "SUCCEEDED" UNIT_COLOUR_END UNIT_BOLD_END);
+            }
+        }
+        // don't take this test result into the final calculation
+        if (test_result && (reg->flags & unit_test_flag_may_fail)) {
+            UNIT_WRITEOUTPUTS(1, " (ignored)");
+        }
+        else {
+            result |= test_result;
+            UNIT_WRITEOUTPUTS(1, "");
+        }
     }
-    UNIT_NAME(deinit)();
+    unit_deinit();
     return result;
 }
+
+
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif

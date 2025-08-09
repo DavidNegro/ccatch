@@ -2,28 +2,11 @@
 // ==== Public interface ====
 // -----------------------------------------------------------------
 
-// NOTE: this library requires the types:
-// int64_t, uint64_t, size_t
-#ifndef UNIT_NO_STDINT
-#include <stdint.h>
-#endif
-
-// NOTE: we need strlen, memcpy, memset.
-// you can use the macros UNIT_STRLEN, UNIT_MEMCPY, UNIT_MEMSET
-// to override the default behaviour
-#ifndef UNIT_NO_STRING_H
-#include <string.h>
-#endif
-
-#ifndef UNIT_STRLEN
-#define UNIT_STRLEN(x) strlen(x)
-#endif
-
 #define __TEST_EXPAND__(x,y) x y
 #define __TEST_CONCAT__(x, y) x ## y
 #define __TEST_STR__(x) #x
 
-// redefine this macro to rename the symbols created by this library
+// redefine this macro to rename the public symbols created by this library
 #ifndef UNIT_NAME
 #define UNIT_NAME(x) __test_ ## x ## __
 #endif
@@ -33,14 +16,35 @@
 #define UNIT_TMPNAME(x) __TEST_EXPAND__(__TEST_CONCAT__, (__test_ ## x ## __, __LINE__))
 #endif
 
+// define this macro for non-test builds if you are including tests in the same
+// file as your code
+#ifdef UNIT_NO_TEST
+#define UNIT_FUNCTION_DECL static
+#else
+#define UNIT_FUNCTION_DECL
+#endif
+
+// -----------------------------------------------------------------
+// Basic integer type definitions
 // -----------------------------------------------------------------
 
-#ifdef _MSC_VER
-#pragma warning(push)
-#pragma warning(disable : 4255)//, justification : "Declaring functions not taking arguments as fn() instead of fn(void)")
-#pragma warning(disable : 4820)//, justification : "Padding bytes added to struct")
-#pragma warning(disable : 5045)//, justification : "Spectre mitigation")
+// long long is required to have at least 64 bits in c99.
+// they are 64 bits in most c compilers
+typedef long long UNIT_NAME(long_int);
+typedef unsigned long long UNIT_NAME(long_uint);
+
+// msvc unint_size_t definition
+#if defined(_WIN32) || defined(_WIN64)
+#ifdef _WIN64
+typedef unsigned long long UNIT_NAME(unit_size);
+#else
+typedef unsigned long UNIT_NAME(unit_size);
 #endif
+
+#else // assume 64 bit in other platforms. TODO: do not assume it
+typedef unsigned long long UNIT_NAME(unit_size);
+#endif
+
 
 // -----------------------------------------------------------------
 // Forward declarations
@@ -50,30 +54,32 @@ typedef void (*UNIT_NAME(case_fn))(void);
 typedef void (*UNIT_NAME(defer_fn))(void* ptr);
 typedef struct UNIT_NAME(log_buffer) UNIT_NAME(log_buffer);
 
-int UNIT_NAME(register_test)(UNIT_NAME(case_fn) fn, const char* fn_name, const char* tags);
-size_t UNIT_NAME(generate)(const char* name, size_t cnt);
-int UNIT_NAME(section_start)(const char* name);
-int UNIT_NAME(section_end)(void);
-void UNIT_NAME(defer)(void* ptr, UNIT_NAME(defer_fn) fn);
-void* UNIT_NAME(scoped_alloc)(size_t size);
-UNIT_NAME(log_buffer)* UNIT_NAME(log_buffer_create)(size_t line, const char* filename, const char* fmt);
-void UNIT_NAME(log_buffer_log)(UNIT_NAME(log_buffer)* buff, const char* macro_name, int is_error);
-int UNIT_NAME(log_buffer_add_str)(UNIT_NAME(log_buffer)* buff, const char* str, size_t sz);
-int UNIT_NAME(log_buffer_add_fmt_int)(UNIT_NAME(log_buffer)* buff, int64_t v);
-int UNIT_NAME(log_buffer_add_fmt_uint)(UNIT_NAME(log_buffer)* buff, uint64_t v);
-int UNIT_NAME(log_buffer_add_fmt_double)(UNIT_NAME(log_buffer)* buff, double v);
-void UNIT_NAME(throw)(void);
-int UNIT_NAME(has_error)(void);
+UNIT_FUNCTION_DECL UNIT_NAME(unit_size) UNIT_NAME(unit_strlen)(const char* str);
+UNIT_FUNCTION_DECL int UNIT_NAME(register_test)(UNIT_NAME(case_fn) fn, const char* fn_name, const char* tags, UNIT_NAME(unit_size) line, const char* filename);
+UNIT_FUNCTION_DECL UNIT_NAME(unit_size) UNIT_NAME(generate)(const char* name, UNIT_NAME(unit_size) cnt);
+UNIT_FUNCTION_DECL int UNIT_NAME(section_start)(const char* name);
+UNIT_FUNCTION_DECL int UNIT_NAME(section_end)(void);
+UNIT_FUNCTION_DECL void UNIT_NAME(defer)(void* ptr, UNIT_NAME(defer_fn) fn);
+UNIT_FUNCTION_DECL void* UNIT_NAME(scoped_alloc)(UNIT_NAME(unit_size) size);
+UNIT_FUNCTION_DECL UNIT_NAME(log_buffer)* UNIT_NAME(log_buffer_create)(UNIT_NAME(unit_size) line, const char* filename, const char* fmt);
+UNIT_FUNCTION_DECL void UNIT_NAME(log_buffer_log)(UNIT_NAME(log_buffer)* buff, const char* macro_name, int is_error);
+UNIT_FUNCTION_DECL int UNIT_NAME(log_buffer_add_str)(UNIT_NAME(log_buffer)* buff, const char* str, UNIT_NAME(unit_size) sz);
+UNIT_FUNCTION_DECL int UNIT_NAME(log_buffer_add_fmt_int)(UNIT_NAME(log_buffer)* buff, UNIT_NAME(long_int) v);
+UNIT_FUNCTION_DECL int UNIT_NAME(log_buffer_add_fmt_uint)(UNIT_NAME(log_buffer)* buff, UNIT_NAME(long_uint) v);
+UNIT_FUNCTION_DECL int UNIT_NAME(log_buffer_add_fmt_double)(UNIT_NAME(log_buffer)* buff, double v);
+UNIT_FUNCTION_DECL void UNIT_NAME(throw)(void);
+UNIT_FUNCTION_DECL int UNIT_NAME(has_error)(void);
 
 // -----------------------------------------------------------------
 // __TEST_REGISTER_TEST__ macro
 // -----------------------------------------------------------------
-/* This macro uses compile-specific stuff to register tests
+/* This macro uses compiler-specific stuff to register tests
    automatically.
 */
 
+#ifndef UNIT_NO_TEST
 #if defined(__cplusplus)
-#define __TEST_REGISTER_TEST__(name, tags) struct __test_registerer_ ## name { __test_registerer_ ## name() { UNIT_NAME(register_test)(__test_ ## name, #name, tags); } }; static __test_registerer_ ## name __test_registerer_v_ ## name;
+#define __TEST_REGISTER_TEST__(name, tags) struct __test_registerer_ ## name { __test_registerer_ ## name() { UNIT_NAME(register_test)(__test_ ## name, #name, tags, __LINE__, __FILE__); } }; static __test_registerer_ ## name __test_registerer_v_ ## name;
 #elif defined(_MSC_VER)
 // from https://stackoverflow.com/questions/1113409/attribute-constructor-equivalent-in-vc
 #pragma section(".CRT$XCU",read)
@@ -87,13 +93,16 @@ int UNIT_NAME(has_error)(void);
 #else
     #define __TEST_INITIALIZER__(f) __TEST_INITIALIZER2__(f,"_")
 #endif
-#define __TEST_REGISTER_TEST__(name, tags) __TEST_EXPAND__(__TEST_INITIALIZER__, (UNIT_TMPNAME(registerer_ ## name))) { UNIT_NAME(register_test)(UNIT_TMPNAME(name), #name, tags); }
-#elif defined(__GNUC__)
+#define __TEST_REGISTER_TEST__(name, tags) __TEST_EXPAND__(__TEST_INITIALIZER__, (UNIT_TMPNAME(registerer_ ## name))) { UNIT_NAME(register_test)(UNIT_TMPNAME(name), #name, tags, __LINE__, __FILE__); }
+#elif defined(__GNUC__) || defined(__CLANG__) || defined(__TINYC__)
 __attribute__((constructor)) static void UNIT_TMPNAME(registerer_ ## name)() { UNIT_NAME(register_test)(UNIT_TMPNAME(name), #name, tags); }
 #else
 #define __TEST_REQUIRE_STATIC_INIT__
 #define __TEST_REGISTER_TEST__(name, tags) void UNIT_NAME(registerer_ ## name)() { UNIT_NAME(register_test)(UNIT_TMPNAME(name), #name, tags); }
 #endif
+#else
+#define __TEST_REGISTER_TEST__(name, tags)
+#endif // #ifndef UNIT_NO_TEST
 
 // -----------------------------------------------------------------
 // Private macros
@@ -112,13 +121,13 @@ do {                                                                            
 
 #define __TEST_CHECKED_TYPED__(name, tp, fmt, last, x, op, y)                  \
 do {                                                                           \
-    tp UNIT_TMPNAME(x) = x;                                                    \
-    tp UNIT_TMPNAME(y) = y;                                                    \
-    if (!(UNIT_TMPNAME(x) op UNIT_TMPNAME(y))) {                               \
+    tp UNIT_TMPNAME(__x) = x;                                                  \
+    tp UNIT_TMPNAME(__y) = y;                                                  \
+    if (!(UNIT_TMPNAME(__x) op UNIT_TMPNAME(__y))) {                           \
         __TEST_EXPAND__(__TEST_LOG_BASE__, (name, 1, "Check failed \""         \
             __TEST_STR__(x op y) "\" with " __TEST_STR__(x) " = {} "           \
-            __TEST_STR__(y) " = {}", fmt(UNIT_TMPNAME(x)),                     \
-            fmt(UNIT_TMPNAME(y))));                                            \
+            __TEST_STR__(y) " = {}", fmt(UNIT_TMPNAME(__x)),                   \
+            fmt(UNIT_TMPNAME(__y))));                                          \
             last;                                                              \
     }                                                                          \
 } while(0)
@@ -126,7 +135,6 @@ do {                                                                           \
 // -----------------------------------------------------------------
 // Public macros
 // -----------------------------------------------------------------
-
 #define UNIT_TEST(name, tags)               \
     static void UNIT_TMPNAME(name)(void);   \
     __TEST_REGISTER_TEST__(name, tags)      \
@@ -137,7 +145,7 @@ do {                                                                           \
 #define UNIT_DEFER(ptr, fn) UNIT_NAME(defer)(ptr, fn)
 #define UNIT_SCOPED_ALLOC(size) UNIT_NAME(scoped_alloc)(size)
 
-#define UNIT_FMT_STR(x) UNIT_NAME(log_buffer_add_str)(UNIT_NAME(log_buffer_variable), x, UNIT_STRLEN(x))
+#define UNIT_FMT_STR(x) UNIT_NAME(log_buffer_add_str)(UNIT_NAME(log_buffer_variable), x, UNIT_NAME(unit_strlen)(x))
 #define UNIT_FMT_STRL(x, sz) UNIT_NAME(log_buffer_add_str)(UNIT_NAME(log_buffer_variable), x, sz)
 #define UNIT_FMT_INT(x) UNIT_NAME(log_buffer_add_fmt_int)(UNIT_NAME(log_buffer_variable), x)
 #define UNIT_FMT_UINT(x) UNIT_NAME(log_buffer_add_fmt_uint)(UNIT_NAME(log_buffer_variable), x)
@@ -199,3 +207,38 @@ do {                                                                           \
 #define FINISH_IF_FAILED() UNIT_FINISH_IF_FAILED()
 
 #endif // #ifndef UNIT_NO_SHORT_NAMES
+
+// -----------------------------------------------------------------
+// Empty static implementations (when UNIT_NO_TEST is defined)
+// -----------------------------------------------------------------
+
+#ifdef UNIT_NO_TEST
+
+#if defined(_MSC_VER)
+#define __EMPTY_BODY__(x) { __assume(0); return x; }
+#elif defined(__GCC__)
+#define __EMPTY_BODY__(x) { __builtin_unreachable(); return x; }
+#else
+#define __EMPTY_BODY__(x) { return x; }
+#endif
+
+UNIT_FUNCTION_DECL UNIT_NAME(unit_size) UNIT_NAME(unit_strlen)(const char* str) __EMPTY_BODY__(0);
+UNIT_FUNCTION_DECL int UNIT_NAME(register_test)(UNIT_NAME(case_fn) fn, const char* fn_name, const char* tags) __EMPTY_BODY__(0)
+UNIT_FUNCTION_DECL UNIT_NAME(unit_size) UNIT_NAME(generate)(const char* name, UNIT_NAME(unit_size) cnt) __EMPTY_BODY__(0)
+UNIT_FUNCTION_DECL int UNIT_NAME(section_start)(const char* name) __EMPTY_BODY__(0)
+UNIT_FUNCTION_DECL int UNIT_NAME(section_end)(void) __EMPTY_BODY__(0)
+UNIT_FUNCTION_DECL void UNIT_NAME(defer)(void* ptr, UNIT_NAME(defer_fn) fn)__EMPTY_BODY__( )
+UNIT_FUNCTION_DECL void* UNIT_NAME(scoped_alloc)(UNIT_NAME(unit_size) size) __EMPTY_BODY__((void*)0)
+UNIT_FUNCTION_DECL UNIT_NAME(log_buffer)* UNIT_NAME(log_buffer_create)(UNIT_NAME(unit_size) line, const char* filename, const char* fmt) __EMPTY_BODY__((UNIT_NAME(log_buffer)*)0)
+UNIT_FUNCTION_DECL void UNIT_NAME(log_buffer_log)(UNIT_NAME(log_buffer)* buff, const char* macro_name, int is_error) __EMPTY_BODY__( )
+UNIT_FUNCTION_DECL int UNIT_NAME(log_buffer_add_str)(UNIT_NAME(log_buffer)* buff, const char* str, UNIT_NAME(unit_size) sz) __EMPTY_BODY__(0)
+UNIT_FUNCTION_DECL int UNIT_NAME(log_buffer_add_fmt_int)(UNIT_NAME(log_buffer)* buff, UNIT_NAME(long_int) v) __EMPTY_BODY__(0)
+UNIT_FUNCTION_DECL int UNIT_NAME(log_buffer_add_fmt_uint)(UNIT_NAME(log_buffer)* buff, UNIT_NAME(long_uint) v) __EMPTY_BODY__(0)
+UNIT_FUNCTION_DECL int UNIT_NAME(log_buffer_add_fmt_double)(UNIT_NAME(log_buffer)* buff, double v) __EMPTY_BODY__(0)
+UNIT_FUNCTION_DECL void UNIT_NAME(throw)(void) __EMPTY_BODY__( )
+UNIT_FUNCTION_DECL int UNIT_NAME(has_error)(void) __EMPTY_BODY__(0)
+
+#undef UNIT_FUNCTION_DECL
+#undef __EMPTY_BODY__
+
+#endif // #ifdef UNIT_NO_TEST
