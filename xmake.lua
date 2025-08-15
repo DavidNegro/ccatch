@@ -1,5 +1,5 @@
 set_project("unit")
-set_version("0.0.1")
+set_version("0.0.2")
 
 add_plugindirs("plugins")
 add_includedirs(".")
